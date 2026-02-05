@@ -9,11 +9,19 @@ repository = "https://github.com/zhao-leo/self_crypto_key"
 keywords = ["encryption", "security", "self-modification", "key-storage"]
 categories = ["cryptography", "encoding"]
 
+# Platform Requirements: This crate only supports Linux platforms with ELF binaries
+# Supported targets include:
+# - x86_64-unknown-linux-gnu
+# - x86_64-unknown-linux-musl
+# - aarch64-unknown-linux-gnu
+# - aarch64-unknown-linux-musl
+# and other Linux targets that use ELF format
+
 [lib]
 name = "self_crypto_key"
 path = "src/lib.rs"
 
-[dependencies]
+[target.'cfg(target_os = "linux")'.dependencies]
 rand = "0.8"
 object = "0.32"
 sha2 = "0.10"
