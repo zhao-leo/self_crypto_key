@@ -1,6 +1,6 @@
 [package]
 name = "self_crypto_key"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["April <zhao@zhaocloud.work>"]
 description = "A library for self-modifying encrypted key storage in binaries"
