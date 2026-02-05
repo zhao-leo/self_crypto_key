@@ -4,6 +4,9 @@ use crate::error::{Error, Result};
 use object::{Object, ObjectSection};
 use sha2::{Digest, Sha256};
 
+// 引入编译时生成的加密常量
+include!(concat!(env!("OUT_DIR"), "/crypto_constants.rs"));
+
 /// 异或加密/解密
 ///
 /// 使用密钥对数据进行异或运算，加密和解密使用相同的函数
@@ -25,7 +28,11 @@ pub fn xor_cipher(data: &[u8], key: &[u8]) -> Vec<u8> {
 
 /// 混淆数据
 ///
-/// 应用位反转和字节运算来混淆数据，使其难以直接识别
+/// 应用多层混淆技术，包括：
+/// 1. 位旋转
+/// 2. S-box 置换
+/// 3. 编译时随机化的算术运算
+/// 4. 多轮迭代
 ///
 /// # 参数
 ///
@@ -36,18 +43,51 @@ pub fn xor_cipher(data: &[u8], key: &[u8]) -> Vec<u8> {
 ///
 /// 混淆后的数据
 pub fn obfuscate(data: &[u8], seed: u8) -> Vec<u8> {
-    data.iter()
+    let mut result: Vec<u8> = data
+        .iter()
         .enumerate()
         .map(|(i, &b)| {
-            // 位反转 + 加上种子和位置偏移
-            (!b).wrapping_add(seed).wrapping_add(i as u8)
+            let mut byte = b;
+
+            // 第1层：位旋转（使用编译时常量）
+            byte = byte.rotate_left(ROTATION_BITS);
+
+            // 第2层：S-box 置换（使用编译时生成的置换表）
+            byte = OBFUSCATE_TABLE[byte as usize];
+
+            // 第3层：编译时随机化的算术混淆
+            byte = byte
+                .wrapping_mul(OBFUSCATE_MULTIPLIER)
+                .wrapping_add(OBFUSCATE_BASE)
+                .wrapping_add(seed)
+                .wrapping_add(i as u8);
+
+            // 第4层：异或掩码
+            byte ^= XOR_MASK;
+
+            byte
         })
-        .collect()
+        .collect();
+
+    // 额外混淆轮次（编译时随机确定）
+    for round in 0..EXTRA_ROUNDS {
+        result = result
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                b.wrapping_add((round as u8).wrapping_mul(seed))
+                    .wrapping_add(i as u8)
+            })
+            .collect();
+    }
+
+    result
 }
 
 /// 反混淆数据
 ///
 /// 将混淆后的数据恢复为原始数据
+/// 必须以相反的顺序撤销所有混淆层
 ///
 /// # 参数
 ///
@@ -58,13 +98,76 @@ pub fn obfuscate(data: &[u8], seed: u8) -> Vec<u8> {
 ///
 /// 恢复后的原始数据
 pub fn deobfuscate(data: &[u8], seed: u8) -> Vec<u8> {
-    data.iter()
+    let mut result = data.to_vec();
+
+    // 撤销额外混淆轮次（逆序）
+    for round in (0..EXTRA_ROUNDS).rev() {
+        result = result
+            .iter()
+            .enumerate()
+            .map(|(i, &b)| {
+                b.wrapping_sub(i as u8)
+                    .wrapping_sub((round as u8).wrapping_mul(seed))
+            })
+            .collect();
+    }
+
+    // 撤销主混淆层（逆序）
+    result
+        .iter()
         .enumerate()
         .map(|(i, &b)| {
-            // 减去位置偏移和种子 + 位反转
-            !(b.wrapping_sub(i as u8).wrapping_sub(seed))
+            let mut byte = b;
+
+            // 撤销第4层：异或掩码
+            byte ^= XOR_MASK;
+
+            // 撤销第3层：算术混淆
+            byte = byte
+                .wrapping_sub(i as u8)
+                .wrapping_sub(seed)
+                .wrapping_sub(OBFUSCATE_BASE);
+
+            // 计算乘法逆元（对于模256）
+            let inv_multiplier = mod_inverse(OBFUSCATE_MULTIPLIER);
+            byte = byte.wrapping_mul(inv_multiplier);
+
+            // 撤销第2层：S-box 置换
+            byte = DEOBFUSCATE_TABLE[byte as usize];
+
+            // 撤销第1层：位旋转
+            byte = byte.rotate_right(ROTATION_BITS);
+
+            byte
         })
         .collect()
+}
+
+/// 计算模256的乘法逆元
+///
+/// 使用扩展欧几里得算法
+fn mod_inverse(a: u8) -> u8 {
+    // 对于奇数 a，在模256下总是存在逆元
+    let mut t = 0i32;
+    let mut new_t = 1i32;
+    let mut r = 256i32;
+    let mut new_r = a as i32;
+
+    while new_r != 0 {
+        let quotient = r / new_r;
+        let tmp_t = t;
+        t = new_t;
+        new_t = tmp_t - quotient * new_t;
+        let tmp_r = r;
+        r = new_r;
+        new_r = tmp_r - quotient * new_r;
+    }
+
+    if t < 0 {
+        t += 256;
+    }
+
+    t as u8
 }
 
 /// 从指定section计算SHA256哈希，用于派生加密密钥

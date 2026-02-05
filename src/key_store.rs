@@ -9,6 +9,9 @@ use std::fs::{self, File};
 use std::io::Read;
 use std::path::PathBuf;
 
+// 引入编译时生成的加密常量
+include!(concat!(env!("OUT_DIR"), "/crypto_constants.rs"));
+
 /// 密钥存储管理器
 ///
 /// 提供密钥的读取、更新等操作，支持任意长度的bytes数据
@@ -24,7 +27,7 @@ impl KeyStore {
     const METADATA_SECTION: &'static str = ".key_meta";
 
     /// 用于派生加密密钥的代码段（.text段不会被密钥更新修改）
-    const DERIVE_SECTION: &'static str = ".key_text";
+    const DERIVE_SECTION: &'static str = ".text";
 
     /// 创建新的KeyStore实例
     ///
@@ -121,8 +124,12 @@ impl KeyStore {
             let derive_key =
                 derive_key_from_section(&binary_data, Self::DERIVE_SECTION, shard_size)?;
 
+            // 使用编译时生成的随机种子偏移量
+            let shard_seed = SHARD_SEED_OFFSETS[i % SHARD_SEED_OFFSETS.len()];
+
             // 加密：混淆 -> 异或
-            let encrypted = encrypt_shard(shard_data, &derive_key, (i * 37) as u8);
+            let encrypted =
+                encrypt_shard(shard_data, &derive_key, shard_seed.wrapping_add(i as u8));
 
             // 写入二进制数据
             binary_data[section_offset..section_offset + shard_size].copy_from_slice(&encrypted);
@@ -234,8 +241,15 @@ impl KeyStore {
             let derive_key =
                 derive_key_from_section(&binary_data, Self::DERIVE_SECTION, shard_size)?;
 
+            // 使用编译时生成的随机种子偏移量（必须与加密时相同）
+            let shard_seed = SHARD_SEED_OFFSETS[i % SHARD_SEED_OFFSETS.len()];
+
             // 解密：异或 -> 反混淆
-            let decrypted = decrypt_shard(encrypted_data, &derive_key, (i * 37) as u8);
+            let decrypted = decrypt_shard(
+                encrypted_data,
+                &derive_key,
+                shard_seed.wrapping_add(i as u8),
+            );
 
             // 只取需要的字节数
             let bytes_to_take = bytes_needed.min(decrypted.len());
