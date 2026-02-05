@@ -6,6 +6,7 @@ authors = ["April <zhao@zhaocloud.work>"]
 description = "A library for self-modifying encrypted key storage in binaries"
 license = "MIT"
 repository = "https://github.com/zhao-leo/self_crypto_key"
+documentation = "https://docs.rs/self_crypto_key"
 keywords = ["encryption", "security", "self-modification", "key-storage"]
 categories = ["cryptography", "encoding"]
 
