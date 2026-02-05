@@ -1,0 +1,28 @@
+[package]
+name = "self_crypto_key"
+version = "0.1.0"
+edition = "2021"
+authors = ["April <zhao@zhaocloud.work>"]
+description = "A library for self-modifying encrypted key storage in binaries"
+license = "MIT"
+repository = "https://github.com/zhao-leo/self_crypto_key"
+keywords = ["encryption", "security", "self-modification", "key-storage"]
+categories = ["cryptography", "encoding"]
+
+[lib]
+name = "self_crypto_key"
+path = "src/lib.rs"
+
+[dependencies]
+rand = "0.8"
+object = "0.32"
+sha2 = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
